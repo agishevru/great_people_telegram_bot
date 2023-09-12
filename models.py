@@ -40,7 +40,7 @@ class Welcome_text(db.Entity):
     text = Optional(str)
 
 
-db.bind(provider='sqlite', filename='bot_database.sqlite', create_db=True)
+db.bind(provider='sqlite', filename='bot_database.bd', create_db=True)
 db.generate_mapping(create_tables=True)
 
 
