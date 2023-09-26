@@ -59,6 +59,6 @@ class Sqlite3_parser:
 # Выводим данные
 if __name__ == '__main__':
     db = Sqlite3_parser('bot_database.sqlite')
-    db.print_table('User', max_col_widths=[20, 20, 20, 20, 20, 20])
+    db.print_table('User', max_col_widths=[20, 20, 20, 20, 20, 20, 20])
     db.print_table('Dialogs', max_col_widths=[3, 10, 10, 15, 100, 10])
     db.close()
