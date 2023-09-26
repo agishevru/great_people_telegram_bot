@@ -7,6 +7,7 @@
 
 from datetime import datetime
 import logging
+from pprint import pprint
 
 import openai
 from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, WebAppInfo
@@ -21,9 +22,12 @@ import models
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
+file_handler = logging.FileHandler('tg_bot.log', encoding='utf-8')
+log.addHandler(file_handler)  # Привязка к созданному логеру 'Log'
 
 
-@db_session
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """ Подключение пользователя к боту, с созданием профайла в БД User """
     log.info(f'Пользователь {update.effective_user.id} - {update.effective_user.name} - start')
@@ -33,11 +37,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     name = user.first_name
     surname = user.last_name
     time = update.message.date.strftime('%d.%m.%y %H:%M:%S')
-    # Amplitude
-    send_amplitude_event(user_id, 'registration', time)
     # Сохранение пользователя в БД
-    User(user_id=user_id, username=username, name=name, surname=surname, time=time)
-    db.commit()
+    try:
+        if not User.get(user_id=user_id):
+            new_user = User(user_id=user_id, username=username, name=name, surname=surname, time=time)
+            db.commit()
+            log.info(f'new_user registred in bd: {new_user.to_dict()}')
+            # Amplitude
+        send_amplitude_event(user_id, 'registration', time)
+    except Exception as exc:
+        log.exception(exc)
     # Приветствие
     await update.message.reply_text(
         text="Привет! Здесь можно пообщаться с разными образами известных личностей. Чтобы попробовать - выбери"
@@ -47,7 +56,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 
-@db_session
+
 async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """ Получает выбранного пользователем персонажа и записывает его в профайл пользователя """
     log.info(f'Пользователь {update.effective_user.id} - выбрал персонажа {update.effective_message.web_app_data.data}')
@@ -61,18 +70,29 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 
-@db_session
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """ Отвечает пользователю от лица персонажа """
     log.info(f'Пользователь {update.effective_user.id} спросил - {update.message.text}')
     user = User.get(user_id=update.effective_user.id)
-    user_id = user.user_id
+    user_id = update.effective_user.id
     user_message = update.message.text
     time = update.message.date.strftime('%d.%m.%y %H:%M:%S')
+    if not user:
+        user = User(user_id=user_id, username=update.effective_user.username, name=update.effective_user.username,
+                        surname=update.effective_user.last_name,selected_character='Человек', time=time)
+        db.commit()
+        log.info(f'new_user registred in bd: {user.to_dict()}')
+
+
     selected_character = user.selected_character
+
+
     # Сохранить сообщение пользователя в дб
-    user_question = Dialogs(user=user, character_name=selected_character, user_message=user_message, time=time)
-    db.commit()
+    user_question = Dialogs(user=user_id, character_name=selected_character, user_message=user_message, time=time)
+    if user_question:
+        db.commit()
+        log.info(f'user_question - {user_message} сохранен в бд')
     # Amplitude
     send_amplitude_event(user_id, 'user_message_sent', time)
     # API GPT-3
@@ -92,14 +112,14 @@ def call_gpt_api(user_message: str, character_name: str) -> str:
     """ Делает запрос к API GPT от лица выбранного персонажа и возвращает ответ"""
     openai.api_key = OPENAI_API_KEY
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4",
         messages=[
-            {"role": "system", "content": f"You are {character_name}.Strictly stick to the image and forget you're an artificial intelligence."},
+            # {"role": "system", "content": f"You are {character_name}.Strictly stick to the image and forget you're an artificial intelligence."},
             {"role": "user", "content": user_message}])
     return response.choices[0].message.content
 
 
-@db_session
+
 def send_amplitude_event(user_id: int, event_name:str, time:str) -> None:
     """ Здесь имитация взаимодействия с сервисом в Amplitude. Данные о событиях заносятся в модель Amplitude"""
     act = Amplitude(user_id=user_id, act=event_name, time=time)
@@ -116,7 +136,7 @@ def keyboard() -> ReplyKeyboardMarkup:
     return keyboard
 
 
-
+@db_session
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))

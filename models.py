@@ -1,46 +1,46 @@
 """ Модуль, создающий подключение к БД и все основные модели с помощью Pony.orm """
 
 from pony.orm import Database, Required, Optional, Set, PrimaryKey, db_session
-
+from config import DB_CONFIG
 
 db = Database()
 
 
 class User(db.Entity):
     """ Карточка пользователя """
-    user_id = PrimaryKey(int)
+    user_id = Optional(int, size=64)
     username = Optional(str)
     name = Optional(str)
     surname = Optional(str)
     time = Optional(str)
     selected_character = Optional(str)
-    dialogs = Set('Dialogs')
+
 
 
 class Dialogs(db.Entity):
     """ Таблица, содержащая запросы пользователей и ответы ИИ """
     response_id = PrimaryKey(int, auto=True)
-    user = Required(User)
-    character_name = Required(str)
-    user_message = Required(str)
+    user = Optional(int, size=64)
+    character_name = Optional(str)
+    user_message = Optional(str)
     character_message = Optional(str)
     time = Optional(str)
 
 
 class Amplitude(db.Entity):
     """ Имитация сервиса аналитики Amplitude """
-    user_id = Required(int)
-    act = Required(str)
+    user_id = Optional(int, size=64)
+    act = Optional(str)
     time = Optional(str)
 
 
 class Welcome_text(db.Entity):
     """ Приветственные сообщения персонажей """
-    character_name = Required(str)
+    character_name = Optional(str)
     text = Optional(str)
 
 
-db.bind(provider='sqlite', filename='bot_database.bd', create_db=True)
+db.bind(**DB_CONFIG)
 db.generate_mapping(create_tables=True)
 
 
