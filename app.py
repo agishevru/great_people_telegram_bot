@@ -31,22 +31,24 @@ log.addHandler(file_handler)  # Привязка к созданному лог�
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """ Подключение пользователя к боту, с созданием профайла в БД User """
     log.info(f'Пользователь {update.effective_user.id} - {update.effective_user.name} - start')
-    user = update.message.from_user
-    user_id = user.id
-    username = user.username
-    name = user.first_name
-    surname = user.last_name
-    time = update.message.date.strftime('%d.%m.%y %H:%M:%S')
+    user_id = update.effective_user.id
+
+    user = User.get(user_id=user_id)
+    if not user: user = User(user_id=user_id, selected_character='Человек')
     # Сохранение пользователя в БД
-    try:
-        if not User.get(user_id=user_id):
-            new_user = User(user_id=user_id, username=username, name=name, surname=surname, time=time)
-            db.commit()
-            log.info(f'new_user registred in bd: {new_user.to_dict()}')
-            # Amplitude
-        send_amplitude_event(user_id, 'registration', time)
-    except Exception as exc:
-        log.exception(exc)
+    if update.effective_user.username: user.username = update.effective_user.username
+    else: user.username = 'No'
+    if update.effective_user.first_name: user.first_name = update.effective_user.first_name
+    else: user.first_name = 'No'
+    if update.effective_user.last_name: user.last_name = update.effective_user.last_name
+    else: user.last_name = 'No'
+    user.time = datetime.now().strftime('%d.%m.%y %H:%M:%S')
+    db.commit()
+
+    log.info(f'new_user registred in bd: {user.to_dict()}')
+    # Amplitude
+    send_amplitude_event(user_id, 'registration', user.time)
+
     # Приветствие
     await update.message.reply_text(
         text="Привет! Здесь можно пообщаться с разными образами известных личностей. Чтобы попробовать - выбери"
@@ -77,13 +79,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user = User.get(user_id=update.effective_user.id)
     user_id = update.effective_user.id
     user_message = update.message.text
-    time = update.message.date.strftime('%d.%m.%y %H:%M:%S')
-    if not user:
-        user = User(user_id=user_id, username=update.effective_user.username, name=update.effective_user.username,
-                        surname=update.effective_user.last_name,selected_character='Человек', time=time)
-        db.commit()
-        log.info(f'new_user registred in bd: {user.to_dict()}')
+    time = datetime.now().strftime('%d.%m.%y %H:%M:%S')
 
+    if not user: user = User(user_id=user_id)
+    # Сохранение пользователя в БД
+    if update.effective_user.username: user.username = update.effective_user.username
+    else: user.username = 'No'
+    if update.effective_user.first_name: user.first_name = update.effective_user.first_name
+    else: user.first_name = 'No'
+    if update.effective_user.last_name: user.last_name = update.effective_user.last_name
+    else: user.last_name = 'No'
+    user.time = datetime.now().strftime('%d.%m.%y %H:%M:%S')
+    db.commit()
+    log.info(f'new_user registred in bd: {user.to_dict()}')
 
     selected_character = user.selected_character
 
